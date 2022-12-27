@@ -1,0 +1,28 @@
+﻿@page "/"
+<PageTitle>Index</PageTitle>
+<ComponentServiceProviderCascade ServiceType="typeof(ITimeService)" ComponentServiceId="this.ComponentServiceId">
+
+    <h1>Hello, world!</h1>
+
+    Welcome to your new app.
+
+    <TimeStamp />
+
+    <AdvancedTimeStamp />
+
+</ComponentServiceProviderCascade>
+@*
+<CascadingValue Value="this.timeService">
+    <CostlyTimeStamp />
+</CascadingValue>
+*@
+@code {
+    private Guid ComponentServiceId = Guid.NewGuid();
+
+    //[Inject] private IComponentServiceProvider serviceProvider { get; set; } = default!;
+
+    //private ITimeService? timeService;
+
+    //protected override void OnInitialized()
+    //    => timeService = serviceProvider.GetOrCreateService<ITimeService>(ComponentServiceId);
+}

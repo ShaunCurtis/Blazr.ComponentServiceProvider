@@ -1,0 +1,22 @@
+﻿@namespace Blazr.UI
+@implements IAsyncDisposable
+
+<CascadingValue Name="ComponentServiceId" Value="this.ComponentServiceId">
+    @this.ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public Guid ComponentServiceId { get; set; } = Guid.NewGuid();
+    [Parameter, EditorRequired] public Type? ServiceType { get; set; }
+    [Inject] private IComponentServiceProvider serviceProvider { get; set; } = default!;
+
+    protected override void OnInitialized()
+        => serviceProvider.GetOrCreateService(ComponentServiceId, ServiceType);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (this.ServiceType is not null)
+            await serviceProvider.RemoveServiceAsync(ComponentServiceId, this.ServiceType);
+    }
+}

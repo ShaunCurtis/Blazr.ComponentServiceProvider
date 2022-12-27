@@ -1,0 +1,56 @@
+﻿@namespace Blazr.UI
+@implements IDisposable
+
+<div class="bg-light p-2 m-2">
+
+    <h3>Advanced TimeStamp Component</h3>
+
+    <div class="m-2">
+        <button class="btn btn-primary" @onclick=Clicked>Update Timestamp</button>
+    </div>
+
+    <div>
+        @(timeService?.Message ?? "No message set.")
+    </div>
+
+    <div class="mt-2 bg-dark text-white">
+        Parameters Set at at @this.ParametersChangedTimeStamp
+    </div>
+
+</div>
+
+@code {
+    [CascadingParameter(Name = "ComponentServiceId")] private Guid ComponentServiceId { get; set; }
+
+    [Inject] private IComponentServiceProvider serviceProvider { get; set; } = default!;
+
+    private ITimeService? timeService;
+    private string ParametersChangedTimeStamp = "Not Set";
+
+    protected override void OnInitialized()
+    {
+        timeService = serviceProvider.GetService<ITimeService>(ComponentServiceId);
+
+        if (this.timeService is not null)
+            timeService.TimeChanged += this.OnUpdate;
+    }
+
+    protected override void OnParametersSet()
+    {
+        Debug.WriteLine("AdvancedTimeStamp - Parameter Change");
+        this.ParametersChangedTimeStamp = DateTime.Now.ToLongTimeString();
+        base.OnParametersSet();
+    }
+
+    private void OnUpdate(object? sender, EventArgs e)
+        => InvokeAsync(this.StateHasChanged);
+
+    private void Clicked()
+      => timeService?.UpdateTime();
+
+    public void Dispose()
+    {
+        if (this.timeService is not null)
+            timeService.TimeChanged -= this.OnUpdate;
+    }
+}
