@@ -504,7 +504,7 @@ You can `unwrap` the cascade and do it yourself within the root component.  It's
 
 That's it, not rocket science.  Comments on improvements/things I've got wrong gratefully received.
 
-And my thought's on what we really need? 
+And my (very humble) thought's on what we really need? 
 
 Add a new scope - say `Component`.  Add a new container implementation called `ComponentScoped`.  It can be created from a `ScopedContainer` i.e. it's parent is a `ScopedContainer`.
 
