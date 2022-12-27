@@ -1,4 +1,4 @@
-# The Blazor Component Scope Conumdrum
+# The Blazor Component Scope Conundrum
 
 Apply good design practices to components, and you separate out the data management function from the display function.  A component such as `FetchData` in the demo project "Fetches(Manages) the data AND displays it in a table".  There's an **AND** in there which is a very good indicator that `FetchData` has multiple concerns/responsibilities.
 
@@ -33,7 +33,7 @@ The `ComponentServiceProvider` I demonstrate below fills the gap.  It's not perf
 
 ## Repo
 
-The repo and latest version of this article is here [Blazr.ComponentServiceManager](https://github.com/ShaunCurtis/Blazr.ComponentServiceManager).
+The repo and latest version of this article is here [Blazr.ComponentServiceProvider](https://github.com/ShaunCurtis/Blazr.ComponentServiceProvider).
 
 ## ComponentServiceProvider in Action
 
