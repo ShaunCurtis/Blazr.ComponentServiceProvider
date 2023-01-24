@@ -35,8 +35,7 @@ It's Ok for services with no dependancies, but....  we don't code many of those!
 
 The fact is, the DotNetCore service container configuration is designed around the old MVC server side model.  There's no scope, or container, that matches the scope of a component.  Until Microsoft provides one, we need a workaround.
 
-My solution is described below.  It's based around a simple timer service and component that display/update a timne value.
-
+My solution is described below.  It's uses a simple time service and component that display/update a time value to demonstrate the solution.
 ## The Repo
 
 The repo and latest version of this article can be found here [Blazr.ComponentServiceProvider](https://github.com/ShaunCurtis/Blazr.ComponentServiceProvider).
