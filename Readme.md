@@ -1,4 +1,4 @@
-# The Blazor Component Scope Conundrum
+# The Blazor Component Service Scope Conundrum
 
 Apply good design practices to components, and you separate out data management from the display function.  A component such as `FetchData` in the demo project "Fetches(Manages) data AND displays it in a table".  There's an **AND** in there: a very good indicator that `FetchData` has multiple concerns/responsibilities.
 
@@ -33,9 +33,9 @@ It's Ok for services with no dependancies, but....  we don't code many of those!
 
 ## Solving the Conundrum
 
-The fact is, we have a DotNetCore service container configuration designed around the old MVC server side model.  We have no scope, or container, that matches the scope of a component.  Until Microsoft gives us one, we need a workaround.
+The fact is, the DotNetCore service container configuration is designed around the old MVC server side model.  There's no scope, or container, that matches the scope of a component.  Until Microsoft provides one, we need a workaround.
 
-My solution is described below.
+My solution is described below.  It's based around a simple timer service and component that display/update a timne value.
 
 ## The Repo
 
@@ -43,7 +43,7 @@ The repo and latest version of this article can be found here [Blazr.ComponentSe
 
 ## The Demo Timer Service
 
-A simple Timer service defined by an interface.
+The simple Timer service interface.
 
 ```csharp
 public interface ITimeService
@@ -54,7 +54,7 @@ public interface ITimeService
 }
 ```
 
-The concrete service, with debug code to monitor instances created and disposed correctly.
+The concrete service.  Debug code is included to monitor instances and disposal.
 
 ```csharp
 public class TimeService : ITimeService, IDisposable, IAsyncDisposable
@@ -104,7 +104,7 @@ public class TimeService : ITimeService, IDisposable, IAsyncDisposable
 ```
 ### TimeStamp
 
-A component to display and update the `TimeService`.  Note the capture of a cascaded `ITimeService`.  It has debug code to show when it's parameters are updated by a parent render.
+`TimeStamp` is a simple component thats displays and updates the `TimeService`.  `ITimeService` is cascaded.  Debug code shows when `SetParametersAsync` async is called.
 
 ```csharp
 @namespace Blazr.UI
@@ -163,15 +163,19 @@ A component to display and update the `TimeService`.  Note the capture of a casc
 }
 ```
 
-We need code to create our *service*.  It needs to create an instance of `TService` which:
+### Service Utilities
+
+We need code to create and manage our *service*.  
+
+It must create an instance of `TService` which:
 
 1. May or may not have DI dependancies.
 2. May or may not implement `IDisposable` and/or `IAsyncDisposable`.
 3. May be an interface or base class service definition in the ServiceContainer.
 
-Luckily there's a little known utility `ActivatorUtilities` we can use.
+`ActivatorUtilities` is a little known utility class that creates and populates object instances with dependancies.
 
-The solution implements this functionality as extension methods to `IServiceContainer`.  The code is deceptively simple:
+The code implements extension methods on `IServiceContainer` to provide the functionality.  It's deceptively simple:
 
 ```csharp
 public static class ServiceUtilities
@@ -188,15 +192,15 @@ public static class ServiceUtilities
 }
 ```
 
-`serviceType` is either the concrete registered object for `TService` or `null`.  If `TService` is an interface or base class `TService` and `serviceType` will be different types.
+`serviceType` is either the concrete DI registered object for `TService`, or `null`.
 
-If `ServiceType` is null there's no definition for `TService` in the service container so we need to activate it directly.
+If `ServiceType` is null, there's no definition for `TService` in the service container; it must be activated directly.
 
-If service type is a type we activate it from the supplied concrete type.
+If service type is a type, it's activated as the supplied concrete type.
 
-Ibn either case we may return a null if `CreateInstance` can't create and instance.  We leave dealing with a null return to the requester.
+In either case, the method may return a null if `CreateInstance` can't create an instance.
 
-There's a second Try wrapper method,
+There's a second Try wrapper method.
 
 ```csharp
     public static bool TryGetComponentService<TService>(this IServiceProvider serviceProvider,[NotNullWhen(true)] out TService? service) where TService : class
@@ -208,9 +212,9 @@ There's a second Try wrapper method,
 
 ### CascadingComponentService
 
-We also need a component wrapper to encapsulate service creation and disposal.
+`CascadingComponentService` is a a component wrapper to encapsulate service creation and disposal.
 
-The main code is implemented in `SetParametersAsync`.  Everything needs to happen before any render event occurs. `IDisposable` and `IAsyncDisposable` is implemented to dispose of `TService` correctly.
+The main code is implemented in `SetParametersAsync`: everything happens before any render event occurs. `IAsyncDisposable` is implemented to ensure `TService` is disposed correctly.
 
 ```csharp
 @namespace Blazr.UI
@@ -273,7 +277,7 @@ The main code is implemented in `SetParametersAsync`.  Everything needs to happe
 
 ### Demo Page
 
-The display page demonstrates using ComponentServiceCascade and capturing the servive from it to implement it's own dispay UI. 
+The display page demonstrates using `CascadingComponentService` and how to capture the service. 
 
 ```csharp
 @page "/"
@@ -317,8 +321,8 @@ The display page demonstrates using ComponentServiceCascade and capturing the se
 }
 ```
 
-You can `unwrap` the cascade and do it yourself within the root component.  It's primary purpose is to implement the disposal.
+You can `unwrap` the cascade and do it yourself within the root component.
 
 ## Wrapping Up
 
-That's it, not rocket science or very orignial.  Comments on improvements/things I've got wrong gratefully received.
+That's it, not rocket science or very orignial.
