@@ -1,0 +1,61 @@
+﻿@*
+/// ============================================================
+/// Author: Shaun Curtis, Cold Elm Coders
+/// License: Use And Donate
+/// If you use it, donate something to a charity somewhere
+/// ============================================================
+*@
+@namespace Blazr.UI
+@implements IHandleAfterRender
+@implements IHandleEvent
+
+<div class="bg-light p-2 m-2">
+
+    <h3>TimeStamp Component</h3>
+
+    <div class="m-2">
+        <button class="btn btn-primary" @onclick=Clicked>Update Timestamp</button>
+    </div>
+
+    <div>
+        @(this.TimeService?.Message ?? "No message set.")
+    </div>
+
+    <div class="mt-2 bg-dark text-white">
+        Parameters Set at at @this.ParametersChangedTimeStamp
+    </div>
+
+</div>
+
+@code {
+    [CascadingParameter] private ITimeService? TimeService { get; set; } = default!;
+
+    private string ParametersChangedTimeStamp = "Not Set";
+
+    protected override void OnInitialized()
+    {
+        if (this.TimeService is null)
+            throw new NullReferenceException($"The {this.GetType().FullName} required a cascaded ITimeService");
+    }
+
+    protected override void OnParametersSet()
+    {
+        Debug.WriteLine("TimeStamp - Parameter Change");
+        this.ParametersChangedTimeStamp = DateTime.Now.ToLongTimeString();
+        base.OnParametersSet();
+    }
+
+    private void Clicked()
+      => TimeService?.UpdateTime();
+
+    // Saving CPU Cycles - No AfterRender Handling
+    Task IHandleAfterRender.OnAfterRenderAsync()
+        => Task.CompletedTask;
+
+    // Saving CPU Cycles - shortcut the UI event handling code. One render per UI event
+    async Task HandleEventAsync(EventCallbackWorkItem callback, object? arg)
+    {
+        await callback.InvokeAsync(arg);
+        StateHasChanged();
+    }
+}

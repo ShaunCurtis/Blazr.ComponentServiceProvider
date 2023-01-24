@@ -1,3 +1,5 @@
+global using System.Diagnostics.CodeAnalysis;
+
 using Blazr.ComponentBase.Server.Data;
 using Blazr.Core;
 
@@ -8,7 +10,6 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddSingleton<WeatherForecastService>();
 
-builder.Services.AddScoped<IComponentServiceProvider, ComponentServiceProvider>();
 builder.Services.AddScoped<ITimeService, TimeService>();
 
 var app = builder.Build();

@@ -1,28 +1,39 @@
 ﻿@page "/"
+@implements IDisposable
+@implements IHandleAfterRender
+@implements IHandleEvent
+
 <PageTitle>Index</PageTitle>
-<ComponentServiceProviderCascade ServiceType="typeof(ITimeService)" ComponentServiceId="this.ComponentServiceId">
 
-    <h1>Hello, world!</h1>
-
-    Welcome to your new app.
-
+<CascadingComponentService TService="ITimeService" @ref=_service >
     <TimeStamp />
+</CascadingComponentService>
 
-    <AdvancedTimeStamp />
+<div class="alert alert-info">
+    @(_service?.ComponentService?.Message ?? "No message set.")
+</div>
 
-</ComponentServiceProviderCascade>
-@*
-<CascadingValue Value="this.timeService">
-    <CostlyTimeStamp />
-</CascadingValue>
-*@
 @code {
-    private Guid ComponentServiceId = Guid.NewGuid();
+    private CascadingComponentService<ITimeService>? _service;
 
-    //[Inject] private IComponentServiceProvider serviceProvider { get; set; } = default!;
+    protected async override Task OnInitializedAsync()
+    {
+        await Task.Yield();
+        // Yields to let the UI do a first render and ensure _service is assigned
+        if (_service is not null && _service.ComponentService is not null)
+            _service.ComponentService.TimeChanged += this.OnTimeChanged;
+    }
 
-    //private ITimeService? timeService;
+    private void OnTimeChanged(object? sender, EventArgs e)
+        => StateHasChanged();
 
-    //protected override void OnInitialized()
-    //    => timeService = serviceProvider.GetOrCreateService<ITimeService>(ComponentServiceId);
+    public void Dispose()
+    {
+        if (_service is not null && _service.ComponentService is not null)
+            _service.ComponentService.TimeChanged -= this.OnTimeChanged;
+    }
+
+    // Saving CPU Cycles - No AfterRender Handling
+    Task IHandleAfterRender.OnAfterRenderAsync()
+        => Task.CompletedTask;
 }
