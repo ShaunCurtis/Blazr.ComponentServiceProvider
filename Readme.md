@@ -35,12 +35,187 @@ It's Ok for services with no dependancies, but....  we don't code many of those!
 
 The fact is, the DotNetCore service container configuration is designed around the old MVC server side model.  There's no scope, or container, that matches the scope of a component.  Until Microsoft provides one, we need a workaround.
 
-My solution is described below.  It's uses a simple time service and component that display/update a time value to demonstrate the solution.
+My solution is described below.  It's uses a simple time service and component that display/update a time value to demonstrate the solution.  The timer code is in the appendix.
+
 ## The Repo
 
 The repo and latest version of this article can be found here [Blazr.ComponentServiceProvider](https://github.com/ShaunCurtis/Blazr.ComponentServiceProvider).
 
-## The Demo Timer Service
+
+### Service Utilities
+
+We need code to create and manage our *service*.
+
+It must create an instance of `TService` which:
+
+1. May or may not have DI dependancies.
+2. May or may not implement `IDisposable` or `IAsyncDisposable`.
+3. May be an interface or base class service definition in the ServiceContainer.
+
+`ActivatorUtilities` is a little known utility class that creates and populates object instances with dependancies in the DI container context.
+
+`GetComponentService` is an extension method on `IServiceContainer` that provides the necessary functionality.  It's deceptively simple:
+
+```csharp
+public static class ServiceUtilities
+{
+    public static TService? GetComponentService<TService>(this IServiceProvider serviceProvider) where TService : class
+    {
+        var serviceType = serviceProvider.GetService<TService>()?.GetType();
+
+        if (serviceType is null)
+            return ActivatorUtilities.CreateInstance<TService>(serviceProvider);
+
+        return ActivatorUtilities.CreateInstance(serviceProvider, serviceType) as TService;
+    }
+}
+```
+
+First step is to try and get an instance of `TService` from the DI Service.  The returned value will either be the concrete registered object for `TService` or `null`.   We assign the concrete type to `serviceType`.
+
+If `serviceType` is null, there's no definition for `TService` in the service container; it must be activated directly.  We call `ActivatorUtilities` and return the provided object instance.  
+
+If `serviceType` is a type, it's activated as the supplied concrete type.
+
+In either case, the method may return a null if `CreateInstance` can't create an instance.
+
+There's also a Try wrapper method to encapsulate the method.
+
+```csharp
+    public static bool TryGetComponentService<TService>(this IServiceProvider serviceProvider,[NotNullWhen(true)] out TService? service) where TService : class
+    {
+        service = serviceProvider.GetComponentService<TService>();
+        return service != null;
+    }
+```
+
+### CascadingComponentService
+
+`CascadingComponentService` is a a component wrapper to encapsulate service creation and disposal.
+
+1. The main code is implemented in `SetParametersAsync`: everything happens before any render event occurs. 
+2. The normal component lifecycle processes are short circuited/bypassed.  We don't need them.
+3. The cascade component is set as `IsFixed`, to stop any render cascades after the initial render.  The render ignores the parameter when working out if any parameters on a component have changed.
+4. `IAsyncDisposable` is implemented to ensure `TService` is disposed correctly.
+
+
+
+```csharp
+@namespace Blazr.UI
+@typeparam TService where TService: class
+@implements IAsyncDisposable
+@implements IHandleAfterRender
+@implements IHandleEvent
+
+<CascadingValue Value="this.ComponentService" IsFixed>
+    @this.ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Inject] private IServiceProvider serviceProvider { get; set; } = default!;
+
+    public TService? ComponentService { get; set; } = default!;
+
+    private bool _firstRender = true;
+    private IDisposable? _disposable;
+    private IAsyncDisposable? _asyncDisposable;
+
+    public override Task SetParametersAsync(ParameterView parameters)
+    {
+        parameters.SetParameterProperties(this);
+
+        if (_firstRender)
+        {
+            this.ComponentService = serviceProvider.GetComponentService<TService>();
+
+            ArgumentNullException.ThrowIfNull(this.ComponentService);
+
+            _disposable = this.ComponentService as IDisposable;
+            _firstRender = false;
+        }
+        // Saving CPU Cycles - No Initialized/OnParametersSet run
+        this.StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposable?.Dispose();
+
+        if (this.ComponentService is IAsyncDisposable asyncDisposable)
+            await asyncDisposable.DisposeAsync();
+    }
+
+    // Saving CPU Cycles - No AfterRender Handling
+    Task IHandleAfterRender.OnAfterRenderAsync()
+        => Task.CompletedTask;
+
+    // Saving CPU Cycles - No automatic rendering
+    Task IHandleEvent.HandleEventAsync(EventCallbackWorkItem callback, object? arg)
+        => callback.InvokeAsync(arg);
+}
+```
+
+### Demo Page
+
+The display page demonstrates using `CascadingComponentService` and how to capture the service. 
+
+```csharp
+@page "/"
+@implements IDisposable
+@implements IHandleAfterRender
+@implements IHandleEvent
+
+<PageTitle>Index</PageTitle>
+
+<CascadingComponentService TService="ITimeService" @ref=_service >
+    <TimeStamp />
+</CascadingComponentService>
+
+<div class="alert alert-info">
+    @(_service?.ComponentService?.Message ?? "No message set.")
+</div>
+
+@code {
+    private CascadingComponentService<ITimeService>? _service;
+
+    protected async override Task OnInitializedAsync()
+    {
+        await Task.Yield();
+        // Yields to let the UI do a first render and ensure _service is assigned
+        if (_service is not null && _service.ComponentService is not null)
+            _service.ComponentService.TimeChanged += this.OnTimeChanged;
+    }
+
+    private void OnTimeChanged(object? sender, EventArgs e)
+        => StateHasChanged();
+
+    public void Dispose()
+    {
+        if (_service is not null && _service.ComponentService is not null)
+            _service.ComponentService.TimeChanged -= this.OnTimeChanged;
+    }
+
+    // Saving CPU Cycles - No AfterRender Handling
+    Task IHandleAfterRender.OnAfterRenderAsync()
+        => Task.CompletedTask;
+}
+```
+
+
+### Do it Yourself
+
+You don't need to use the wrapper.  You can `unwrap` the cascade and do it yourself within your root component.
+
+## Wrapping Up
+
+That's it, not rocket science nor very original.
+
+## Appendix 
+
+### The Demo Timer Service
 
 The simple Timer service interface.
 
@@ -161,167 +336,3 @@ public class TimeService : ITimeService, IDisposable, IAsyncDisposable
     }
 }
 ```
-
-### Service Utilities
-
-We need code to create and manage our *service*.  
-
-It must create an instance of `TService` which:
-
-1. May or may not have DI dependancies.
-2. May or may not implement `IDisposable` and/or `IAsyncDisposable`.
-3. May be an interface or base class service definition in the ServiceContainer.
-
-`ActivatorUtilities` is a little known utility class that creates and populates object instances with dependancies.
-
-The code implements extension methods on `IServiceContainer` to provide the functionality.  It's deceptively simple:
-
-```csharp
-public static class ServiceUtilities
-{
-    public static TService? GetComponentService<TService>(this IServiceProvider serviceProvider) where TService : class
-    {
-        var serviceType = serviceProvider.GetService<TService>()?.GetType();
-
-        if (serviceType is null)
-            return ActivatorUtilities.CreateInstance<TService>(serviceProvider);
-
-        return ActivatorUtilities.CreateInstance(serviceProvider, serviceType) as TService;
-    }
-}
-```
-
-`serviceType` is either the concrete DI registered object for `TService`, or `null`.
-
-If `ServiceType` is null, there's no definition for `TService` in the service container; it must be activated directly.
-
-If service type is a type, it's activated as the supplied concrete type.
-
-In either case, the method may return a null if `CreateInstance` can't create an instance.
-
-There's a second Try wrapper method.
-
-```csharp
-    public static bool TryGetComponentService<TService>(this IServiceProvider serviceProvider,[NotNullWhen(true)] out TService? service) where TService : class
-    {
-        service = serviceProvider.GetComponentService<TService>();
-        return service != null;
-    }
-```
-
-### CascadingComponentService
-
-`CascadingComponentService` is a a component wrapper to encapsulate service creation and disposal.
-
-The main code is implemented in `SetParametersAsync`: everything happens before any render event occurs. `IAsyncDisposable` is implemented to ensure `TService` is disposed correctly.
-
-```csharp
-@namespace Blazr.UI
-@typeparam TService where TService: class
-@implements IAsyncDisposable
-@implements IHandleAfterRender
-@implements IHandleEvent
-
-<CascadingValue Value="this.ComponentService" IsFixed>
-    @this.ChildContent
-</CascadingValue>
-
-@code {
-    [Parameter] public RenderFragment? ChildContent { get; set; }
-
-    [Inject] private IServiceProvider serviceProvider { get; set; } = default!;
-
-    public TService? ComponentService { get; set; } = default!;
-
-    private bool _firstRender = true;
-    private IDisposable? _disposable;
-    private IAsyncDisposable? _asyncDisposable;
-
-    public override Task SetParametersAsync(ParameterView parameters)
-    {
-        parameters.SetParameterProperties(this);
-
-        if (_firstRender)
-        {
-            this.ComponentService = serviceProvider.GetComponentService<TService>();
-
-            if (this.ComponentService is null)
-                throw new NullReferenceException($"No {typeof(TService).FullName} cound be created.");
-
-            _disposable = this.ComponentService as IDisposable;
-            _firstRender = false;
-        }
-        // Saving CPU Cycles - No Initialized/OnParametersSet run
-        this.StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _disposable?.Dispose();
-
-        if (this.ComponentService is IAsyncDisposable asyncDisposable)
-            await asyncDisposable.DisposeAsync();
-    }
-
-    // Saving CPU Cycles - No AfterRender Handling
-    Task IHandleAfterRender.OnAfterRenderAsync()
-        => Task.CompletedTask;
-
-    // Saving CPU Cycles - No automatic rendering
-    Task IHandleEvent.HandleEventAsync(EventCallbackWorkItem callback, object? arg)
-        => callback.InvokeAsync(arg);
-}
-```
-
-### Demo Page
-
-The display page demonstrates using `CascadingComponentService` and how to capture the service. 
-
-```csharp
-@page "/"
-@implements IDisposable
-@implements IHandleAfterRender
-@implements IHandleEvent
-
-<PageTitle>Index</PageTitle>
-
-<CascadingComponentService TService="ITimeService" @ref=_service >
-    <TimeStamp />
-</CascadingComponentService>
-
-<div class="alert alert-info">
-    @(_service?.ComponentService?.Message ?? "No message set.")
-</div>
-
-@code {
-    private CascadingComponentService<ITimeService>? _service;
-
-    protected async override Task OnInitializedAsync()
-    {
-        await Task.Yield();
-        // Yields to let the UI do a first render and ensure _service is assigned
-        if (_service is not null && _service.ComponentService is not null)
-            _service.ComponentService.TimeChanged += this.OnTimeChanged;
-    }
-
-    private void OnTimeChanged(object? sender, EventArgs e)
-        => StateHasChanged();
-
-    public void Dispose()
-    {
-        if (_service is not null && _service.ComponentService is not null)
-            _service.ComponentService.TimeChanged -= this.OnTimeChanged;
-    }
-
-    // Saving CPU Cycles - No AfterRender Handling
-    Task IHandleAfterRender.OnAfterRenderAsync()
-        => Task.CompletedTask;
-}
-```
-
-You can `unwrap` the cascade and do it yourself within the root component.
-
-## Wrapping Up
-
-That's it, not rocket science or very orignial.

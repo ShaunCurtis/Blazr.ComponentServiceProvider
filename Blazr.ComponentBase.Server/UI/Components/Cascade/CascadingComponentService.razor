@@ -12,7 +12,7 @@
 @implements IHandleAfterRender
 @implements IHandleEvent
 
-<CascadingValue Value="this.ComponentService" IsFixed>
+<CascadingValue Value="this.ComponentService" IsFixed=true>
     @this.ChildContent
 </CascadingValue>
 
@@ -35,13 +35,12 @@
         {
             this.ComponentService = serviceProvider.GetComponentService<TService>();
 
-            if (this.ComponentService is null)
-                throw new NullReferenceException($"No {typeof(TService).FullName} cound be created.");
+            ArgumentNullException.ThrowIfNull(this.ComponentService);
 
             _disposable = this.ComponentService as IDisposable;
             _firstRender = false;
         }
-        // Saving CPU Cycles - No Initialized/OnParametersSet run
+        // Save some CPU Cycles - No Initialized/OnParametersSet run
         this.StateHasChanged();
         return Task.CompletedTask;
     }
@@ -54,11 +53,11 @@
             await asyncDisposable.DisposeAsync();
     }
 
-    // Saving CPU Cycles - No AfterRender Handling
+    // Save some CPU Cycles - No AfterRender Handling
     Task IHandleAfterRender.OnAfterRenderAsync()
         => Task.CompletedTask;
 
-    // Saving CPU Cycles - No automatic rendering
+    // Save some CPU Cycles - No automatic rendering
     Task IHandleEvent.HandleEventAsync(EventCallbackWorkItem callback, object? arg)
         => callback.InvokeAsync(arg);
 
